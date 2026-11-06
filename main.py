@@ -1,7 +1,8 @@
 
 import os
 import asyncio
-from openai import OpenAI
+import logging
+
 from telegram import Update
 from telegram.ext import (
     Application,
@@ -10,38 +11,50 @@ from telegram.ext import (
     ContextTypes,
     filters
 )
+from google import genai
 
-ai = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+logging.basicConfig(level=logging.INFO)
+
+client = genai.Client(
+    api_key=os.getenv("GEMINI_API_KEY")
+)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Привет! Я ИИ-помощник на базе GPT. Спрашивай что угодно!"
+        "Привет! Я AFM AI 🤖\n"
+        "Я работаю на Google Gemini. Задавай вопросы!"
     )
 
-async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         response = await asyncio.to_thread(
-            ai.responses.create,
-            model="gpt-6-astra",
-            instructions="Ты дружелюбный русскоязычный помощник.",
-            input=update.message.text
+            client.models.generate_content,
+            model="gemini-2.5-flash",
+            contents=update.message.text
         )
-        await update.message.reply_text(response.output_text)
+
+        answer = response.text or "Не удалось получить ответ."
+
+        await update.message.reply_text(answer)
+
     except Exception:
+        logging.exception("Gemini error")
         await update.message.reply_text(
-            "Не удалось получить ответ. Попробуй позже."
+            "Произошла ошибка. Попробуй позже."
         )
 
 def main():
     app = Application.builder().token(
-        os.environ["BOT_TOKEN"]
+        os.getenv("BOT_TOKEN")
     ).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, reply)
+        MessageHandler(filters.TEXT & ~filters.COMMAND, chat)
     )
+
     app.run_polling()
 
 if __name__ == "__main__":
     main()
+
